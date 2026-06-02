@@ -31,20 +31,27 @@ def safe_color(color):
 
 def assign_color(index):
     material = get_material(index)
-    if material:
-        rgb = get_color(index)
-        rgba = (rgb[0], rgb[1], rgb[2], 1)
+    if not material:
+        return
 
-        if (material.use_nodes and bpy.context.scene.render.engine == 'CYCLES') or (
-            bpy.context.scene.render.engine == 'BLENDER_EEVEE' and material.use_nodes
-        ):
-            for n in material.node_tree.nodes:
-                if n.bl_idname == "ShaderNodeBsdfPrincipled":
+    rgb = get_color(index)
+    rgba = (rgb[0], rgb[1], rgb[2], 1)
+
+    engine = bpy.context.scene.render.engine
+
+    if material.use_nodes:
+        for n in material.node_tree.nodes:
+            if n.bl_idname == "ShaderNodeBsdfPrincipled":
+                # Blender 4.x / 5.x safer lookup.
+                if "Base Color" in n.inputs:
+                    n.inputs["Base Color"].default_value = rgba
+                else:
                     n.inputs[0].default_value = rgba
-            material.diffuse_color = rgba
 
-        elif bpy.context.scene.render.engine == 'BLENDER_EEVEE' and not material.use_nodes:
-            material.diffuse_color = rgba
+        material.diffuse_color = rgba
+
+    else:
+        material.diffuse_color = rgba
 
 
 
@@ -56,18 +63,22 @@ def get_material(index):
 
         if not material:
             replace_material(index)
+            return bpy.data.materials.get(name)
 
-        if (not material.use_nodes) and bpy.context.scene.render.engine == 'CYCLES':
+        # In Blender 5.x, Eevee is usually BLENDER_EEVEE_NEXT, not BLENDER_EEVEE.
+        engine = bpy.context.scene.render.engine
+
+        if (not material.use_nodes) and engine == 'CYCLES':
             replace_material(index)
+            return bpy.data.materials.get(name)
 
-        elif bpy.context.scene.render.engine == 'BLENDER_EEVEE' and material.use_nodes:
+        elif engine in {'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT'} and material.use_nodes:
             replace_material(index)
-        else:
-            return material
+            return bpy.data.materials.get(name)
 
-    material = create_material(index)
-    assign_color(index)
-    return material
+        return material
+
+    return create_material(index)
 
 
 
